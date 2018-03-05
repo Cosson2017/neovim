@@ -49,3 +49,4 @@ local.mk
 /runtime/doc/*.html
 /runtime/doc/tags.ref
 /runtime/doc/errors.log
+src/nvim/compile_commands.json
