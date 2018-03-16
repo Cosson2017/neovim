@@ -4864,7 +4864,9 @@ void fix_help_buffer(void)
   char_u      *rt;
 
   // Set filetype to "help".
-  set_option_value("ft", 0L, "help", OPT_LOCAL);
+  if (STRCMP(curbuf->b_p_ft, "help") != 0) {
+    set_option_value("ft", 0L, "help", OPT_LOCAL);
+  }
 
   if (!syntax_present(curwin)) {
     for (lnum = 1; lnum <= curbuf->b_ml.ml_line_count; ++lnum) {
@@ -5826,7 +5828,8 @@ static void sign_list_defined(sign_T *sp)
   }
   if (sp->sn_line_hl > 0) {
     msg_puts(" linehl=");
-    const char *const p = get_highlight_name(NULL, sp->sn_line_hl - 1);
+    const char *const p = get_highlight_name_ext(NULL,
+                                                 sp->sn_line_hl - 1, false);
     if (p == NULL) {
       msg_puts("NONE");
     } else {
@@ -5835,7 +5838,8 @@ static void sign_list_defined(sign_T *sp)
   }
   if (sp->sn_text_hl > 0) {
     msg_puts(" texthl=");
-    const char *const p = get_highlight_name(NULL, sp->sn_text_hl - 1);
+    const char *const p = get_highlight_name_ext(NULL,
+                                                 sp->sn_text_hl - 1, false);
     if (p == NULL) {
       msg_puts("NONE");
     } else {

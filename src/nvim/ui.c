@@ -49,7 +49,7 @@
 #define MAX_UI_COUNT 16
 
 static UI *uis[MAX_UI_COUNT];
-static bool ui_ext[UI_WIDGETS] = { 0 };
+static bool ui_ext[kUIExtCount] = { 0 };
 static size_t ui_count = 0;
 static int row = 0, col = 0;
 static struct {
@@ -142,12 +142,6 @@ void ui_builtin_start(void)
 void ui_builtin_stop(void)
 {
   UI_CALL(stop);
-}
-
-/// Returns true if UI `ui` is stopped.
-bool ui_is_stopped(UI *ui)
-{
-  return ui->data == NULL;
 }
 
 bool ui_rgb_attached(void)
@@ -246,8 +240,8 @@ void ui_refresh(void)
   }
 
   int width = INT_MAX, height = INT_MAX;
-  bool ext_widgets[UI_WIDGETS];
-  for (UIWidget i = 0; (int)i < UI_WIDGETS; i++) {
+  bool ext_widgets[kUIExtCount];
+  for (UIExtension i = 0; (int)i < kUIExtCount; i++) {
     ext_widgets[i] = true;
   }
 
@@ -255,7 +249,7 @@ void ui_refresh(void)
     UI *ui = uis[i];
     width = MIN(ui->width, width);
     height = MIN(ui->height, height);
-    for (UIWidget i = 0; (int)i < UI_WIDGETS; i++) {
+    for (UIExtension i = 0; (int)i < kUIExtCount; i++) {
       ext_widgets[i] &= ui->ui_ext[i];
     }
   }
@@ -267,8 +261,10 @@ void ui_refresh(void)
   screen_resize(width, height);
   p_lz = save_p_lz;
 
-  for (UIWidget i = 0; (int)i < UI_WIDGETS; i++) {
-    ui_set_external(i, ext_widgets[i]);
+  for (UIExtension i = 0; (int)i < kUIExtCount; i++) {
+    ui_ext[i] = ext_widgets[i];
+    ui_call_option_set(cstr_as_string((char *)ui_ext_names[i]),
+                       BOOLEAN_OBJ(ext_widgets[i]));
   }
   ui_mode_info_set();
   old_mode_idx = -1;
@@ -441,9 +437,8 @@ void ui_puts(uint8_t *str)
 
     if (p_wd) {  // 'writedelay': flush & delay each time.
       ui_flush();
-      assert(p_wd >= 0
-             && (sizeof(long) <= sizeof(uint64_t) || p_wd <= UINT64_MAX));
-      os_delay((uint64_t)p_wd, false);
+      uint64_t wd = (uint64_t)labs(p_wd);
+      os_delay(wd, false);
     }
   }
 }
@@ -527,15 +522,23 @@ void ui_cursor_shape(void)
 }
 
 /// Returns true if `widget` is externalized.
-bool ui_is_external(UIWidget widget)
+bool ui_is_external(UIExtension widget)
 {
   return ui_ext[widget];
 }
 
-/// Sets `widget` as "external".
-/// Such widgets are not drawn by Nvim; external UIs are expected to handle
-/// higher-level UI events and present the data.
-void ui_set_external(UIWidget widget, bool external)
+Array ui_array(void)
 {
-  ui_ext[widget] = external;
+  Array all_uis = ARRAY_DICT_INIT;
+  for (size_t i = 0; i < ui_count; i++) {
+    Dictionary dic = ARRAY_DICT_INIT;
+    PUT(dic, "width", INTEGER_OBJ(uis[i]->width));
+    PUT(dic, "height", INTEGER_OBJ(uis[i]->height));
+    PUT(dic, "rgb", BOOLEAN_OBJ(uis[i]->rgb));
+    for (UIExtension j = 0; j < kUIExtCount; j++) {
+      PUT(dic, ui_ext_names[j], BOOLEAN_OBJ(uis[i]->ui_ext[j]));
+    }
+    ADD(all_uis, DICTIONARY_OBJ(dic));
+  }
+  return all_uis;
 }

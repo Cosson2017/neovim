@@ -2133,9 +2133,11 @@ syn_current_attr (
 
   /* nextgroup ends at end of line, unless "skipnl" or "skipempty" present */
   if (current_next_list != NULL
-      && syn_getcurline()[current_col + 1] == NUL
-      && !(current_next_flags & (HL_SKIPNL | HL_SKIPEMPTY)))
+      && (line = syn_getcurline())[current_col] != NUL
+      && line[current_col + 1] == NUL
+      && !(current_next_flags & (HL_SKIPNL | HL_SKIPEMPTY))) {
     current_next_list = NULL;
+  }
 
   if (!GA_EMPTY(&zero_width_next_ga))
     ga_clear(&zero_width_next_ga);
@@ -4968,6 +4970,8 @@ static void syn_cmd_cluster(exarg_T *eap, int syncing)
       if (scl_id >= 0) {
         syn_combine_list(&SYN_CLSTR(curwin->w_s)[scl_id].scl_list,
                          &clstr_list, list_op);
+      } else {
+        xfree(clstr_list);
       }
       got_clstr = true;
     }
@@ -5276,8 +5280,9 @@ get_id_list (
           break;
         }
         if (count != 0) {
-          EMSG2(_("E408: %s must be first in contains list"), name + 1);
-          failed = TRUE;
+          EMSG2(_("E408: %s must be first in contains list"),
+                name + 1);
+          failed = true;
           xfree(name);
           break;
         }
@@ -7753,14 +7758,28 @@ static void highlight_list_two(int cnt, int attr)
 }
 
 
-/*
- * Function given to ExpandGeneric() to obtain the list of group names.
- * Also used for synIDattr() function.
- */
-const char *get_highlight_name(expand_T *const xp, const int idx)
+/// Function given to ExpandGeneric() to obtain the list of group names.
+const char *get_highlight_name(expand_T *const xp, int idx)
   FUNC_ATTR_WARN_UNUSED_RESULT
 {
-  // TODO(justinmk): 'xp' is unused
+  return get_highlight_name_ext(xp, idx, true);
+}
+
+
+/// Obtain a highlight group name.
+/// When "skip_cleared" is TRUE don't return a cleared entry.
+const char *get_highlight_name_ext(expand_T *xp, int idx, int skip_cleared)
+  FUNC_ATTR_WARN_UNUSED_RESULT
+{
+  if (idx < 0) {
+    return NULL;
+  }
+
+  // Items are never removed from the table, skip the ones that were cleared.
+  if (skip_cleared && idx < highlight_ga.ga_len && HL_TABLE()[idx].sg_cleared) {
+    return "";
+  }
+
   if (idx == highlight_ga.ga_len && include_none != 0) {
     return "none";
   } else if (idx == highlight_ga.ga_len + include_none
@@ -7772,20 +7791,10 @@ const char *get_highlight_name(expand_T *const xp, const int idx)
   } else if (idx == highlight_ga.ga_len + include_none + include_default + 1
              && include_link != 0) {
     return "clear";
-  } else if (idx < 0) {
+  } else if (idx >= highlight_ga.ga_len) {
     return NULL;
   }
-
-  // Items are never removed from the table, skip the ones that were cleared.
-  int current_idx = idx;
-  while (current_idx < highlight_ga.ga_len
-         && HL_TABLE()[current_idx].sg_cleared) {
-    current_idx++;
-  }
-  if (current_idx >= highlight_ga.ga_len) {
-    return NULL;
-  }
-  return (const char *)HL_TABLE()[current_idx].sg_name;
+  return (const char *)HL_TABLE()[idx].sg_name;
 }
 
 color_name_table_T color_name_table[] = {

@@ -12,7 +12,11 @@ list(APPEND CMAKE_MODULE_PATH "${PROJECT_SOURCE_DIR}/cmake")
 include(PreventInTreeBuilds)
 
 # Prefer our bundled versions of dependencies.
+if(DEFINED ENV{DEPS_BUILD_DIR})
+set(DEPS_PREFIX "$ENV{DEPS_BUILD_DIR}/usr" CACHE PATH "Path prefix for finding dependencies")
+else()
 set(DEPS_PREFIX "${CMAKE_CURRENT_SOURCE_DIR}/.deps/usr" CACHE PATH "Path prefix for finding dependencies")
+endif()
 if(CMAKE_CROSSCOMPILING AND NOT UNIX)
   list(INSERT CMAKE_FIND_ROOT_PATH 0 ${DEPS_PREFIX})
   list(INSERT CMAKE_PREFIX_PATH 0 ${DEPS_PREFIX}/../host/bin)
@@ -204,6 +208,7 @@ int main(void)
 if(MSVC)
   # XXX: /W4 gives too many warnings. #3241
   add_definitions(/W3 -D_CRT_SECURE_NO_WARNINGS -D_CRT_NONSTDC_NO_DEPRECATE)
+  add_definitions(-DWIN32)
 else()
   add_definitions(-Wall -Wextra -pedantic -Wno-unused-parameter
     -Wstrict-prototypes -std=gnu99)
@@ -223,6 +228,9 @@ endif()
 if(MINGW)
   # Use POSIX compatible stdio in Mingw
   add_definitions(-D__USE_MINGW_ANSI_STDIO)
+endif()
+if(WIN32)
+  # Windows Vista is the minimum supported version
   add_definitions(-D_WIN32_WINNT=0x0600)
 endif()
 
@@ -250,13 +258,14 @@ if(HAS_DIAG_COLOR_FLAG)
 endif()
 
 if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
-  if(CMAKE_CXX_COMPILER_VERSION VERSION_LESS "4.8.5")
-    # Array-bounds testing is broken in some GCC versions before 4.8.5.
-    # https://gcc.gnu.org/bugzilla/show_bug.cgi?id=56273
-    check_c_compiler_flag(-Wno-array-bounds HAS_NO_ARRAY_BOUNDS_FLAG)
-    if(HAS_NO_ARRAY_BOUNDS_FLAG)
-      add_definitions(-Wno-array-bounds)
-    endif()
+  # 1. Array-bounds testing is broken in some GCC versions before 4.8.5.
+  #    https://gcc.gnu.org/bugzilla/show_bug.cgi?id=56273
+  # 2. But _Pragma("...ignored") is broken (unresolved) in GCC 5+:
+  #    https://gcc.gnu.org/bugzilla/show_bug.cgi?id=66099
+  # So we must disable -Warray-bounds globally for GCC (for kbtree.h, #7083).
+  check_c_compiler_flag(-Wno-array-bounds HAS_NO_ARRAY_BOUNDS_FLAG)
+  if(HAS_NO_ARRAY_BOUNDS_FLAG)
+    add_definitions(-Wno-array-bounds)
   endif()
 endif()
 
